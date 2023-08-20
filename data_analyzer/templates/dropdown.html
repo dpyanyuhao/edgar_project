@@ -1,0 +1,35 @@
+<form method="post" action="{% url 'dropdown' %}">
+    {% csrf_token %}
+    <select name="manager_dropdown">
+        {% for fund in funds %}
+            <option value="{{ fund.cik }}" {% if fund.cik == selected_cik %}selected{% endif %}>{{ fund.manager_name }}</option>
+        {% endfor %}
+    </select>    
+    <input type="submit" value="Submit">
+</form>
+
+{% if positions %}
+<h3>Positions:</h3>
+<table border="1">
+    <thead>
+        <tr>
+            <th>Ticker</th>
+            <th>Name</th>
+            <th>Value</th>
+            <th>Shares</th>
+            <th>Filing Period</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for position in positions %}
+        <tr>
+            <td>{{ position.cusip__ticker }}</td>
+            <td>{{ position.cusip__name }}</td>
+            <td>{{ position.value }}</td>
+            <td>{{ position.shares }}</td>
+            <td>{{ position.filing_period }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
