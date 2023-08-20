@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Graph Page</title>
+</head>
+<body>
+    <h1>Welcome to the Graph Page</h1>
+    
+    <table border="1">
+        <!-- Assuming your table has columns 'id', 'name', 'value' as an example -->
+        <thead>
+            <tr>
+                <th>CIK</th>
+                <th>Name</th>
+                <th>City</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fund in funds %}
+            <tr>
+                <td>{{ fund.cik }}</td>
+                <td>{{ fund.manager_name }}</td>
+                <td>{{ fund.city }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
