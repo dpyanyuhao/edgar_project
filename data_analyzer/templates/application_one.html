@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Fund and Time Interval</title>
+    <!-- Including jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+
+<!-- Bootstrap CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+
+<form id="fundForm">
+    Select a fund:
+    <select id="cikDropdown">
+        {% for fund in funds %}
+            <option value="{{ fund.cik }}">{{ fund.manager_name }}</option>
+        {% endfor %}
+    </select>
+    <br>
+    Time interval:
+    <select id="timeDropdown">
+        <!-- To be populated dynamically -->
+    </select>
+    <br>
+    <input type="submit" value="Show Data">
+</form>
+
+
+<div class="container">
+    <div id="resultsTable" class="mt-3">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover">
+                <thead class="thead-dark text-center">
+                    <tr>
+                        <th>Stock Name</th>
+                        <th>Ticker</th>
+                        <th>Value</th>
+                        <th>Shares</th>
+                        <th>% Change in Shares</th>
+                        <th>Absolute Change in Shares</th>
+                        <th>% of Company</th>
+                    </tr>
+                </thead>
+                <tbody class="text-center">
+                    <!-- Data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<!-- AJAX script -->
+<script>
+    $(document).ready(function(){
+        $("#cikDropdown").change(function(){
+            let selectedCIK = $(this).val();
+
+            // Clear the previous options
+            $("#timeDropdown").empty();
+
+            $.ajax({
+                url: '/get_time_intervals/',
+                data: {
+                    'cik': selectedCIK
+                },
+                success: function(data) {
+                    data.intervals.forEach(function(interval){
+                        $("#timeDropdown").append('<option value="'+interval+'">'+interval+'</option>');
+                    });
+                }
+            });
+        });
+
+        $("#fundForm").submit(function(e){
+            e.preventDefault();
+
+            let selectedCIK = $("#cikDropdown").val();
+            let selectedTime = $("#timeDropdown").val();
+
+            $.ajax({
+                url: '/get_cik_and_time/',
+                data: {
+                    'cik': selectedCIK,
+                    'time': selectedTime
+                },
+                success: function(data) {
+                    // Clear existing data rows
+                    $("#resultsTable tbody").empty();
+
+                    data.data.forEach(function(stock){
+                        let row = `<tr>
+                            <td>${stock.stock_name}</td>
+                            <td>${stock.ticker}</td>
+                            <td>${stock.value}</td>
+                            <td>${stock.shares}</td>
+                            <td>${stock['% change in shares']}</td>
+                            <td>${stock['absolute change in shares']}</td>
+                            <td>${stock['% of company']}</td>
+                        </tr>`;
+                        $("#resultsTable tbody").append(row);
+                    });
+                }
+            });
+        });
+    });
+</script>
+
+</body>
+</html>

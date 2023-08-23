@@ -12,30 +12,34 @@
     {{ plot|safe }}
 {% endif %}
 
-{% if positions %}
-<h3>Positions:</h3>
-<table border="1">
-    <thead>
-        <tr>
-            <th>Ticker</th>
-            <th>Name</th>
-            <th>Sector</th>
-            <th>Value</th>
-            <th>Shares</th>
-            <th>Filing Period</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for position in positions %}
-        <tr>
-            <td>{{ position.cusip__ticker }}</td>
-            <td>{{ position.cusip__name }}</td>
-            <td>{{ position.cusip__sector }}</td>
-            <td>{{ position.value }}</td>
-            <td>{{ position.shares }}</td>
-            <td>{{ position.filing_period }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% endif %}
+<!-- Dropdown for cusip__name selection -->
+<select id="cusip_dropdown">
+    {% for position_name in unique_cusip_names %}
+        <option value="{{ position_name }}">{{ position_name }}</option>
+    {% endfor %}
+</select>
+<button id="cusip_submit">Filter</button>
+
+<!-- Div to hold the filtered positions table -->
+<div id="filtered_positions"></div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('#cusip_submit').click(function() {
+        var selectedCusipName = $('#cusip_dropdown').val();
+        
+        $.ajax({
+            url: '{% url "get_filtered_positions" %}',
+            method: 'GET',
+            data: {
+                'cusip_name': selectedCusipName,
+                'cik': $('[name="manager_dropdown"]').val()  // Send the selected manager's CIK as well
+            },
+            success: function(data) {
+                $('#filtered_positions').html(data.table);
+            }
+        });
+    });
+});
+</script>

@@ -35,12 +35,6 @@ class PositionInfo(models.Model):
     cik = models.ForeignKey(FundInfo, models.DO_NOTHING, db_column='cik', blank=True, null=True)
     filing_period = models.DateField(blank=True, null=True)
 
-    @property
-    def filing_date(self):
-        if self.filing_period:
-            return datetime.strptime(self.filing_period, '%d-%b-%Y').date()
-        return None
-
     class Meta:
         managed = False
         db_table = 'position_info'
