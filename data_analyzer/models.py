@@ -1,4 +1,6 @@
 from django.db import models
+from datetime import datetime
+
 
 class FundInfo(models.Model):
     cik = models.IntegerField(primary_key=True)
@@ -31,7 +33,13 @@ class PositionInfo(models.Model):
     value = models.IntegerField(blank=True, null=True)
     shares = models.IntegerField(blank=True, null=True)
     cik = models.ForeignKey(FundInfo, models.DO_NOTHING, db_column='cik', blank=True, null=True)
-    filing_period = models.CharField(max_length=255, blank=True, null=True)
+    filing_period = models.DateField(blank=True, null=True)
+
+    @property
+    def filing_date(self):
+        if self.filing_period:
+            return datetime.strptime(self.filing_period, '%d-%b-%Y').date()
+        return None
 
     class Meta:
         managed = False
