@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.http import JsonResponse
 from .models import FundInfo, PositionInfo, SecurityInfo
+from datetime import datetime
 import plotly.express as px
 import pandas as pd
 
@@ -187,11 +188,10 @@ def get_time_intervals(request):
 
 
 def get_position_change_table(request):
-    from datetime import datetime
     # 1. Extract parameters from the request
     cik = int(request.GET.get('cik'))
-    start_time = request.GET.get('start time')
-    end_time = request.GET.get('end time')
+    start_time = request.GET.get('start_time')
+    end_time = request.GET.get('end_time')
 
     # Convert the 'time' string to a datetime object
     start_date = datetime.strptime(start_time, '%Y-%m-%d').date()
@@ -355,18 +355,34 @@ def get_sector_exposure_plot(request):
     plot = fig.to_html(full_html=False, default_height=500, default_width=800)
     return JsonResponse({"plot": plot})
 
+
+def application_two(request):
+    securities = SecurityInfo.objects.all().order_by('name')
+    return render(request, 'application_two.html', {'securities': securities})
+
+
+def get_time_intervals_by_cusip(request):
+    cusip = request.GET.get('cusip')
+    intervals = PositionInfo.objects.filter(cusip=cusip).values_list('filing_period', flat=True).distinct().order_by('filing_period')
+    return JsonResponse({'intervals': list(intervals)})
+
+
 def get_dollar_notional_plot(request):
     cusip = request.GET.get('cusip')
     start_time = request.GET.get('start_time')
     end_time = request.GET.get('end_time')
 
+    # Convert the 'time' string to a datetime object
+    start_date = datetime.strptime(start_time, '%Y-%m-%d').date()
+    end_date = datetime.strptime(end_time, '%Y-%m-%d').date()
+
     positions = PositionInfo.objects.filter(
         cusip=cusip,
-        filing_period__range =[start_time, end_time]
+        filing_period__range =[start_date, end_date]
     ).order_by('filing_period')
    
    # Create a DataFrame for easier calculations
-    df = pd.DataFrame.from_queryset(positions)
+    df = pd.DataFrame(list(positions.values()))
 
     # Compute total value and total shares at each filing_period
     data_points = df.groupby('filing_period').agg({'value': 'sum', 'shares': 'sum'}).reset_index()
@@ -378,9 +394,13 @@ def get_dollar_notional_plot(request):
 
     # Plot using Plotly Express
     fig = px.line(data_points, x='filing_period', y='notional', title="$ Notional Bought/Sold over Period")
-    plot_html = fig.to_html()
+    fig.update_layout(
+        xaxis_title="Filing Period",
+        yaxis_title="$ Notional Bought/Sold"
+        )
+    plot = fig.to_html(full_html=False, default_height=500, default_width=800)
 
-    return JsonResponse({'plot_html': plot_html})
+    return JsonResponse({"plot": plot})
 
 
 

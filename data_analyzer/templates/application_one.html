@@ -225,8 +225,8 @@
                 url: '/get_position_change_table/',
                 data: {
                     'cik': selectedCIK,
-                    'start time': selectedStartTime,
-                    'end time': selectedEndTime
+                    'start_time': selectedStartTime,
+                    'end_time': selectedEndTime
                 },
                 success: function(data) {
                     allData = data.data;
@@ -238,6 +238,8 @@
                 }
             });
         });
+
+        $("#cikDropdown").trigger('change');
     });
 </script>
 {% endblock %}

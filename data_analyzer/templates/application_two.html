@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Select Security and Time Interval{% endblock %}
+
+{% block content %}
+<form id="securityForm">
+    Select a security:
+    <select id="cusip_dropdown">
+        {% for security in securities %}
+            <option value="{{ security.cusip }}" {% if forloop.first %}selected{% endif %}>{{ security.name }}</option>
+        {% endfor %}
+    </select>
+    <br>
+    Start Date:
+    <select id="startTimeDropdown">
+        <!-- To be populated dynamically -->
+    </select>
+    <br>
+    End Date:
+    <select id="endTimeDropdown">
+        <!-- To be populated dynamically -->
+    </select>
+    <br>
+    <input type="submit" value="Show Data">
+</form>
+
+<!-- Placeholder for the Plotly graph -->
+<div id="plotlyGraph1" class="mt-3"></div>
+{% endblock %}
+
+{% block scripts %}
+<!-- AJAX script -->
+<script>
+     $(document).ready(function(){
+
+        $("#cusip_dropdown").change(function(){
+            let selectedCusip = $(this).val();
+
+            // Clear the previous options
+            $("#startTimeDropdown, #endTimeDropdown").empty();
+
+            $.ajax({
+                url: '/get_time_intervals_by_cusip/',
+                data: {
+                    'cusip': selectedCusip
+                },
+                success: function(data) {
+                    data.intervals.forEach(function(interval){
+                        $("#startTimeDropdown, #endTimeDropdown").append('<option value="'+interval+'">'+interval+'</option>');
+                    });
+
+                    $('#endTimeDropdown').val($('#endTimeDropdown option:last').val());
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('An error occurred:', textStatus, errorThrown);
+                    alert('An error occurred while fetching time intervals.');
+                }
+            });
+
+        });
+
+        $("#securityForm").submit(function(e){
+            e.preventDefault();
+            currentPage = 0;
+
+            let selectedCusip = $("#cusip_dropdown").val();
+            let selectedStartTime = $("#startTimeDropdown").val();
+            let selectedEndTime = $("#endTimeDropdown").val();
+
+            // Check if end time is before start time
+            if (Date.parse(selectedStartTime) > Date.parse(selectedEndTime)) {
+                alert("End time cannot be before start time.");
+                return;
+            }
+
+            $.ajax({
+                url: '/get_dollar_notional_plot/',
+                data: {
+                    'cusip': selectedCusip,
+                    'start_time': selectedStartTime,
+                    'end_time': selectedEndTime
+                },
+                success: function(data) {
+                    $("#plotlyGraph1").html(data.plot);
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('An error occurred:', textStatus, errorThrown);
+                    alert('An error occurred while fetching position change data.');
+                }
+            });
+        });
+
+        $("#cusip_dropdown").trigger('change');
+    });
+</script>
+{% endblock %}
