@@ -187,19 +187,20 @@ def get_time_intervals(request):
     return JsonResponse({'intervals': list(intervals)})
 
 
-def get_cik_and_time(request):
+def get_position_change_table(request):
     from datetime import datetime
     # 1. Extract parameters from the request
     cik = int(request.GET.get('cik'))
-    time = request.GET.get('time')
+    start_time = request.GET.get('start time')
+    end_time = request.GET.get('end time')
 
     # Convert the 'time' string to a datetime object
-    time_as_date = datetime.strptime(time, '%Y-%m-%d').date()
+    start_date = datetime.strptime(start_time, '%Y-%m-%d').date()
+    end_date = datetime.strptime(end_time, '%Y-%m-%d').date()
 
     # 2. Retrieve data for the given cik and time
-    current_positions = PositionInfo.objects.filter(cik=cik, filing_period=time_as_date)
-    prev_quarter_date = PositionInfo.objects.filter(cik=cik, filing_period__lt=time).latest('filing_period').filing_period
-    previous_positions = PositionInfo.objects.filter(cik=cik, filing_period=prev_quarter_date)
+    current_positions = PositionInfo.objects.filter(cik=cik, filing_period=start_date)
+    previous_positions = PositionInfo.objects.filter(cik=cik, filing_period=end_date)
 
     # Convert previous_positions to a dictionary for easier lookup
     prev_data = {pos.cusip_id: pos for pos in previous_positions}
@@ -214,7 +215,7 @@ def get_cik_and_time(request):
         shares = pos.shares
         prev_shares = prev_data.get(pos.cusip_id).shares if pos.cusip_id in prev_data else 0
         change_in_shares = shares - prev_shares
-        percent_change = round((shares - prev_shares) / prev_shares * 100, 2) if prev_shares != 0 else 0
+        percent_change = round((shares - prev_shares) / prev_shares * 100, 2) if prev_shares != 0 else "NEW"
         percent_of_company = round((value / sum([p.value for p in current_positions])) * 100, 2)
 
         results.append({
@@ -233,3 +234,112 @@ def get_cik_and_time(request):
     # 5. Send the data
     return JsonResponse({'data': sorted_results})
 
+
+def get_fund_holdings_plot(request):
+    cik = int(request.GET.get('cik'))
+    positions = PositionInfo.objects.filter(cik=cik)
+    positions_with_security_info = positions.values('cusip__ticker', 'cusip__name', 'cusip__sector', 'value', 'shares', 'filing_period').order_by('filing_period')
+           
+    import plotly.express as px
+    import pandas as pd
+
+    df = pd.DataFrame(positions_with_security_info)
+    df = df.sort_values('cusip__name')
+    fig = px.area(df, x="filing_period", y="value", color="cusip__name")
+    fig.update_traces(mode="markers+lines", hovertemplate=None)
+    fig.update_layout(hovermode="x")
+
+    fig.update_layout(
+        xaxis_title="Period",
+        yaxis_title="Total Value",
+        legend_title_text="Holdings"
+        )
+    
+    fig.update_layout(
+        xaxis=dict(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=3, label="3m", step="month", stepmode="backward"),
+                    dict(count=6, label="6m", step="month", stepmode="backward"),
+                    dict(count=1, label="1y", step="year", stepmode="backward"),
+                    dict(step="all", label="All")
+                    ])
+                    ),
+            rangeslider=dict(visible=True),
+            type="date"
+            )
+        )
+     
+    fig.update_layout(
+        updatemenus=[
+            dict(
+                type='buttons',
+                showactive=False,
+                x=1.3,
+                y=-0.1,
+                buttons=[
+                    dict(label='Show All',
+                        method='restyle',
+                        args=['visible', [True for trace in fig.data]]),
+                    dict(label='Hide All',
+                        method='restyle',
+                        args=['visible', ['legendonly' for trace in fig.data]])
+                    ]
+                )
+            ]
+        )
+
+    plot = fig.to_html(full_html=False, default_height=500, default_width=800)
+    return JsonResponse({"plot": plot})
+
+
+def get_sector_exposure_plot(request):
+    cik = int(request.GET.get('cik'))
+    positions = PositionInfo.objects.filter(cik=cik)
+    positions_with_security_info = positions.values('cusip__ticker', 'cusip__name', 'cusip__sector', 'value', 'shares', 'filing_period').order_by('filing_period')
+    
+    import plotly.express as px
+    import pandas as pd
+
+    # Convert the queryset to a DataFrame
+    df = pd.DataFrame(positions_with_security_info)
+
+    # Aggregate value by cusip__sector and filing_period
+    aggregated = df.groupby(['cusip__sector', 'filing_period'])['value'].sum().reset_index()
+
+    # Compute the total value for each filing_period
+    total_per_period = aggregated.groupby('filing_period')['value'].sum().reset_index()
+    total_per_period = total_per_period.rename(columns={'value': 'total_value'})
+
+    # Merge the aggregated and total_per_period DataFrames to compute percentages
+    merged = pd.merge(aggregated, total_per_period, on='filing_period')
+    merged['percentage'] = (merged['value'] / merged['total_value']) * 100
+    merged['percentage_text'] = merged['percentage'].apply(lambda x: f"{x:.2f}%")
+    # Sort the merged dataframe based on the 'cusip__sector' column
+    merged = merged.sort_values(by='cusip__sector')
+
+    fig = px.bar(merged, 
+                 y="filing_period", 
+                 x="percentage", 
+                 color="cusip__sector", 
+                 orientation="h",
+                 title="Sector Exposure by Filing Period",
+                 hover_data={"cusip__sector": True,
+                             "percentage": False,
+                             "percentage_text": True,
+                             "filing_period": True},
+                 labels={'cusip__sector': 'Sector',
+                         'percentage_text': 'Weight',
+                         'filing_period': 'Period'}
+              )
+    
+    fig.update_layout(
+        xaxis_title="% of holdings",
+        yaxis_title="Filing Period",
+        legend_title_text="Sector"
+        )
+    
+    # Set the stacking mode
+    fig.update_layout(barmode='stack')
+    plot = fig.to_html(full_html=False, default_height=500, default_width=800)
+    return JsonResponse({"plot": plot})
