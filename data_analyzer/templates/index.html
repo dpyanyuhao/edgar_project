@@ -1,5 +1,8 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
+
+{% block title %}Welcome to the webpage{% endblock %}
+
+{% block content %}
 <head>
     <title>Index Page</title>
 </head>
@@ -11,6 +14,6 @@
     <a href="{% url 'landing' %}"><button>Go to Landing Page</button></a>
     <a href="{% url 'application_one' %}"><button>Go to app 1 Page</button></a>
 </body>
-</html>
+{% endblock %}
 
 

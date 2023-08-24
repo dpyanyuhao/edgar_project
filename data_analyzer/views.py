@@ -2,6 +2,8 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.http import JsonResponse
 from .models import FundInfo, PositionInfo, SecurityInfo
+import plotly.express as px
+import pandas as pd
 
 # Create your views here.
 def index(request):
@@ -104,9 +106,6 @@ def landing(request):
         unique_cusip_names = sorted(set([position['cusip__name'] for position in positions_with_security_info]))
         context.update({'unique_cusip_names': unique_cusip_names})
 
-        import plotly.express as px
-        import pandas as pd
-
         df = pd.DataFrame(positions_with_security_info)
         df = df.sort_values('cusip__name')
         fig = px.area(df, 
@@ -202,8 +201,9 @@ def get_position_change_table(request):
     current_positions = PositionInfo.objects.filter(cik=cik, filing_period=start_date)
     previous_positions = PositionInfo.objects.filter(cik=cik, filing_period=end_date)
 
-    # Convert previous_positions to a dictionary for easier lookup
+    # Convert both previous_positions and current_positions to dictionaries for easier lookup
     prev_data = {pos.cusip_id: pos for pos in previous_positions}
+    current_data = {pos.cusip_id: pos for pos in current_positions}
 
     results = []
 
@@ -228,6 +228,23 @@ def get_position_change_table(request):
             '% of company': percent_of_company
         })
     
+    for pos in previous_positions:
+        if pos.cusip_id not in current_data:
+            ticker = pos.cusip.ticker
+            stock_name = pos.cusip.name
+            prev_shares = pos.shares
+
+            # These positions were sold, so their current value, shares, and % of company are 0
+            results.append({
+                'stock_name': stock_name,
+                'ticker': ticker,
+                'value': 0,
+                'shares': 0,
+                '% change in shares': -100,  # Because it was sold
+                'absolute change in shares': -prev_shares,  # Negative of previous shares
+                '% of company': 0
+            })
+    
     # Sorting results by '% of company' in descending order
     sorted_results = sorted(results, key=lambda x: x['% of company'], reverse=True)
 
@@ -239,9 +256,6 @@ def get_fund_holdings_plot(request):
     cik = int(request.GET.get('cik'))
     positions = PositionInfo.objects.filter(cik=cik)
     positions_with_security_info = positions.values('cusip__ticker', 'cusip__name', 'cusip__sector', 'value', 'shares', 'filing_period').order_by('filing_period')
-           
-    import plotly.express as px
-    import pandas as pd
 
     df = pd.DataFrame(positions_with_security_info)
     df = df.sort_values('cusip__name')
@@ -297,9 +311,6 @@ def get_sector_exposure_plot(request):
     cik = int(request.GET.get('cik'))
     positions = PositionInfo.objects.filter(cik=cik)
     positions_with_security_info = positions.values('cusip__ticker', 'cusip__name', 'cusip__sector', 'value', 'shares', 'filing_period').order_by('filing_period')
-    
-    import plotly.express as px
-    import pandas as pd
 
     # Convert the queryset to a DataFrame
     df = pd.DataFrame(positions_with_security_info)
@@ -343,3 +354,34 @@ def get_sector_exposure_plot(request):
     fig.update_layout(barmode='stack')
     plot = fig.to_html(full_html=False, default_height=500, default_width=800)
     return JsonResponse({"plot": plot})
+
+def get_dollar_notional_plot(request):
+    cusip = request.GET.get('cusip')
+    start_time = request.GET.get('start_time')
+    end_time = request.GET.get('end_time')
+
+    positions = PositionInfo.objects.filter(
+        cusip=cusip,
+        filing_period__range =[start_time, end_time]
+    ).order_by('filing_period')
+   
+   # Create a DataFrame for easier calculations
+    df = pd.DataFrame.from_queryset(positions)
+
+    # Compute total value and total shares at each filing_period
+    data_points = df.groupby('filing_period').agg({'value': 'sum', 'shares': 'sum'}).reset_index()
+
+    # Compute the $ notional bought/sold
+    data_points['price'] = data_points['value']/data_points['shares']
+    data_points['delta_shares'] = data_points['shares'].diff().fillna(0)
+    data_points['notional'] = data_points['delta_shares'] * data_points['price']
+
+    # Plot using Plotly Express
+    fig = px.line(data_points, x='filing_period', y='notional', title="$ Notional Bought/Sold over Period")
+    plot_html = fig.to_html()
+
+    return JsonResponse({'plot_html': plot_html})
+
+
+
+

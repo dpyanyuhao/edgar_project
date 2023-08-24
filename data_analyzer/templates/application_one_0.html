@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Fund and Time Interval</title>
+    <!-- Including jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+
+
+<form id="fundForm">
+    Select a fund:
+    <select id="cikDropdown">
+        {% for fund in funds %}
+            <option value="{{ fund.cik }}">{{ fund.manager_name }}</option>
+        {% endfor %}
+    </select>
+    <br>
+    Time interval Start:
+    <select id="startTimeDropdown">
+        <!-- To be populated dynamically -->
+    </select>
+    <br>
+    Time interval End:
+    <select id="endTimeDropdown">
+        <!-- To be populated dynamically -->
+    </select>
+    <br>
+    <input type="submit" value="Show Data">
+</form>
+
+
+<div class="container">
+    <!-- Placeholder for the Plotly graph -->
+    <div id="plotlyGraph1" class="mt-3"></div>
+</div>
+
+<div class="container">
+    <!-- Placeholder for the Plotly graph -->
+    <div id="plotlyGraph2" class="mt-3"></div>
+</div>
+
+
+<div class="container">
+    <div id="resultsTable" class="mt-3">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover">
+                <thead class="thead-dark text-center">
+                    <tr>
+                        <th>Stock Name</th>
+                        <th>Ticker</th>
+                        <th>Value</th>
+                        <th>Shares</th>
+                        <th>% Change in Shares</th>
+                        <th>Absolute Change in Shares</th>
+                        <th>% of Company</th>
+                    </tr>
+                </thead>
+                <tbody class="text-center">
+                    <!-- Data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<!-- AJAX script -->
+<script>
+    $(document).ready(function(){
+        $("#cikDropdown").change(function(){
+            let selectedCIK = $(this).val();
+
+            // Clear the previous options
+            $("#startTimeDropdown, #endTimeDropdown").empty();
+
+            $.ajax({
+                url: '/get_time_intervals/',
+                data: {
+                    'cik': selectedCIK
+                },
+                success: function(data) {
+                    data.intervals.forEach(function(interval){
+                        $("#startTimeDropdown, #endTimeDropdown").append('<option value="'+interval+'">'+interval+'</option>');
+                    });
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('An error occurred:', textStatus, errorThrown);
+                    alert('An error occurred while fetching time intervals.');
+                }
+            });
+
+            $.ajax({
+                url: '/get_fund_holdings_plot/',
+                data: {
+                    'cik': selectedCIK
+                },
+                success: function(data) {
+                    $("#plotlyGraph1").html(data.plot);
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('An error occurred:', textStatus, errorThrown);
+                    alert('An error occurred while fetching the Plotly graph.');
+                }
+            });
+
+            $.ajax({
+                url: '/get_sector_exposure_plot/',
+                data: {
+                    'cik': selectedCIK
+                },
+                success: function(data) {
+                    $("#plotlyGraph2").html(data.plot);
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('An error occurred:', textStatus, errorThrown);
+                    alert('An error occurred while fetching the Plotly graph.');
+                }
+            });
+
+        });
+
+        $("#fundForm").submit(function(e){
+            e.preventDefault();
+
+            let selectedCIK = $("#cikDropdown").val();
+            let selectedStartTime = $("#startTimeDropdown").val();
+            let selectedEndTime = $("#endTimeDropdown").val();
+
+            // Check if end time is before start time
+            if (Date.parse(selectedStartTime) > Date.parse(selectedEndTime)) {
+                alert("End time cannot be before start time.");
+                return;
+            }
+
+            $.ajax({
+                url: '/get_position_change_table/',
+                data: {
+                    'cik': selectedCIK,
+                    'start time': selectedStartTime,
+                    'end time': selectedEndTime
+                },
+                success: function(data) {
+                    // Clear existing data rows
+                    $("#resultsTable tbody").empty();
+
+                    data.data.forEach(function(stock){
+                        let row = `<tr>
+                            <td>${stock.stock_name}</td>
+                            <td>${stock.ticker}</td>
+                            <td>${stock.value}</td>
+                            <td>${stock.shares}</td>
+                            <td>${stock['% change in shares']}</td>
+                            <td>${stock['absolute change in shares']}</td>
+                            <td>${stock['% of company']}</td>
+                        </tr>`;
+                        $("#resultsTable tbody").append(row);
+                    });
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('An error occurred:', textStatus, errorThrown);
+                    alert('An error occurred while fetching position change data.');
+                }
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
