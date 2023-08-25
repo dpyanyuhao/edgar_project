@@ -1,6 +1,8 @@
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.http import JsonResponse
+from django.db.models import F, Window
+from django.db.models.functions import RowNumber
 from .models import FundInfo, PositionInfo, SecurityInfo
 from datetime import datetime
 import plotly.express as px
@@ -381,7 +383,7 @@ def get_dollar_notional_plot(request):
         filing_period__range =[start_date, end_date]
     ).order_by('filing_period')
    
-   # Create a DataFrame for easier calculations
+    # Create a DataFrame for easier calculations
     df = pd.DataFrame(list(positions.values()))
 
     # Compute total value and total shares at each filing_period
@@ -391,17 +393,75 @@ def get_dollar_notional_plot(request):
     data_points['price'] = data_points['value']/data_points['shares']
     data_points['delta_shares'] = data_points['shares'].diff().fillna(0)
     data_points['notional'] = data_points['delta_shares'] * data_points['price']
+    data_points['notional'] = data_points['notional'].round(2)
 
     # Plot using Plotly Express
-    fig = px.line(data_points, x='filing_period', y='notional', title="$ Notional Bought/Sold over Period")
+    fig = px.line(data_points, 
+                  x='filing_period', 
+                  y='notional', 
+                  title="$ Notional Bought/Sold over Period",
+                  labels={'filing_period': 'Period',
+                          'notional': 'Notional Bought/Sold'
+                          }
+                )
     fig.update_layout(
         xaxis_title="Filing Period",
         yaxis_title="$ Notional Bought/Sold"
         )
     plot = fig.to_html(full_html=False, default_height=500, default_width=800)
 
+    chart_data = data_points[['filing_period', 'value', 'shares', 'notional']].to_dict('records')
+
+    return JsonResponse({"plot": plot, "chart_data": chart_data})
+
+
+def get_top_holdings_plot(request):
+    cusip = request.GET.get('cusip')
+    num_of_funds = int(request.GET.get('num_of_funds'))
+
+    # Get top n positions for each period in a single query using annotations and Subquery
+    top_positions = (
+        PositionInfo.objects
+        .filter(cusip=cusip)
+        .annotate(
+            rank=Window(
+                expression=RowNumber(),
+                order_by=F('value').desc(),
+                partition_by=F('filing_period')
+            )
+        )
+        .filter(rank__lte=num_of_funds)
+        .values('cusip', 'value', 'shares', 'cik', 'filing_period', 'cik__manager_name')
+        .order_by('-value')
+    )
+
+    # Convert the queryset directly to DataFrame
+    data = pd.DataFrame(list(top_positions))
+
+    fig = px.bar(data, 
+                 y="filing_period", 
+                 x="value",
+                 color="cik__manager_name", 
+                 orientation="h",
+                 title="Top Holders by Period",
+                 hover_data={"cik__manager_name": True,
+                             "value": True,
+                             "filing_period": True,
+                             "cik": True},
+                 labels={'cik__manager_name': 'Fund',
+                         'value': 'Value',
+                         'filing_period': 'Period',
+                         'cik': 'CIK'}
+    )
+
+    fig.update_layout(
+        xaxis_title="Value",
+        yaxis_title="Filing Period",
+        legend_title_text="Fund Name"
+        )
+    
+    # Set the stacking mode
+    fig.update_layout(barmode='stack')
+    plot = fig.to_html(full_html=False, default_height=500, default_width=800)
+
     return JsonResponse({"plot": plot})
-
-
-
-

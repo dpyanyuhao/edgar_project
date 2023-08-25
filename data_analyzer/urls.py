@@ -14,6 +14,7 @@ urlpatterns = [
     path('get_time_intervals_by_cusip/', views.get_time_intervals_by_cusip, name='get_time_intervals_by_cusip'),
     path('get_fund_holdings_plot/', views.get_fund_holdings_plot, name='get_fund_holdings_plot'),
     path('get_dollar_notional_plot/', views.get_dollar_notional_plot, name='get_dollar_notional_plot'),
+    path('get_top_holdings_plot/', views.get_top_holdings_plot, name='get_top_holdings_plot'),
     path('get_sector_exposure_plot/', views.get_sector_exposure_plot, name='get_sector_exposure_plot'),
     path('get_position_change_table/', views.get_position_change_table, name='get_position_change_table'),
 ]
